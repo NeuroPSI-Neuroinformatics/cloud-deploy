@@ -1,5 +1,6 @@
 """
-
+Provides a class representing a service provided by a Docker container,
+e.g. a web server or a database.
 """
 
 from __future__ import print_function, unicode_literals
@@ -101,6 +102,7 @@ class Service(object):
         self.status = data["State"]["Status"]
 
     def launch(self):
+        """Launch a new instance of the service."""
         self.node.pull(self.image)
         ports_str = ""
         if self.ports:

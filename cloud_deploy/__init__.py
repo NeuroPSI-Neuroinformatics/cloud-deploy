@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
+"""
+A simple tool for deploying services (provided by Docker containers) in the cloud.
 
-__author__ = """Andrew P. Davison"""
-__email__ = 'andrew.davison@unic.cnrs-gif.fr'
+Author: Andrew Davison, CNRS, 2016-2017
+"""
+
 __version__ = '0.1.0'
 
 from .nodes import Node, list_nodes, get_node

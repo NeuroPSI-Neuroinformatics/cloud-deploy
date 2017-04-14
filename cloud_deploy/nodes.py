@@ -1,5 +1,7 @@
 """
+Provides a class representing a compute node.
 
+At present, only works with DigitalOcean Droplets.
 """
 
 from collections import OrderedDict

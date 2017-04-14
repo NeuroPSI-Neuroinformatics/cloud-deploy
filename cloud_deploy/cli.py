@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 """
-Script for controlling the deployment of certain components of the
-HBP Neuromorphic Computing Platform.
+Script for deploying services (provided by Docker containers) in the cloud.
 
-Author: Andrew Davison, CNRS, 2016
-
+Author: Andrew Davison, CNRS, 2016-2017
 
 Usage: deploy.py [OPTIONS] COMMAND [ARGS]...
 
