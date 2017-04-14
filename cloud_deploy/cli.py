@@ -51,12 +51,11 @@ PROJECT_DIR = dirname(dirname(abspath(__file__)))
 
 
 def load_config(name):
-    with open("{}.yml".format(name)) as fp:
+    with open("deployment/{}.yml".format(name)) as fp:
         config = yaml.load(fp)
-    with open("{}-secrets.yml".format(name)) as fp:
+    with open("deployment/{}-secrets.yml".format(name)) as fp:
         config.update(yaml.load(fp))
     return config
-
 
 @click.option("--debug", is_flag=True)
 @click.group()
@@ -75,21 +74,14 @@ def build(service, colour):
         git_tag += "z"
 
     shell = spur.LocalShell()
-    image = load_config(service)["image"]
+    config = load_config(service)
+    image = config["image"]
     logger.info("Building image '{}' for service '{}', environment '{}', version {}".format(image, service, colour, git_tag))
 
     # build image
-    if image == "cnrsunic/nmpi_resource_manager":
-        cmd = "docker build -t {} -f resource_manager/Dockerfile .".format(image)
-        build_directory = PROJECT_DIR
-    elif image == "cnrsunic/neuromorphic_docs":
-        cmd = "docker build -t {} .".format(image)
-        build_directory = join(PROJECT_DIR, "documentation")
-    elif image == "cnrsunic/nmpi_queue_server":
-        cmd = "docker build -t {} -f job_manager/Dockerfile .".format(image)
-        build_directory = PROJECT_DIR
-    else:
-        raise NotImplementedError("Building the {} image not yet supported.".format(image))
+    build_directory = os.getcwd()
+    dockerfile = config["dockerfile"]
+    cmd = "docker build -t {} -f {} .".format(image, dockerfile)
 
     # write version information
     with open(join(build_directory, "build_info.json"), "w") as fp:
