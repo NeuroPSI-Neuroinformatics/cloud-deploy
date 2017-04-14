@@ -11,12 +11,12 @@ from .nodes import Node, list_nodes, get_node
 from .services import Service
 
 
-def list_services():
+def list_services(update=True):
     nodes = list_nodes()
     services = []
     for node in nodes:
         if "dockerapp.io" not in node.name:  # can't currently list services run on Docker Cloud
-            services += node.services()
+            services += node.services(update=update)
     return services
 
 

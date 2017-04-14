@@ -4,8 +4,10 @@ Provides a class representing a compute node.
 At present, only works with DigitalOcean Droplets.
 """
 
+import os
 from collections import OrderedDict
 from time import sleep
+import json
 import shlex
 import logging
 import digitalocean
@@ -14,9 +16,16 @@ from .services import Service
 
 do_manager = None
 logger = logging.getLogger("deploy")
+CACHE_FILE = os.path.expanduser("~/.clouddeploycache")
+DOCKER_USER = "cnrsunic"
 
 
 def get_token():
+    """
+    Retrieve the DigitalOcean API token from the MacOS keychain.
+
+    TODO: generalize to support Linux password stores.
+    """
     token = spur.LocalShell().run(['security', 'find-generic-password',
                                    '-s', 'DigitalOcean API token', '-w'],
                                   encoding='utf-8')
@@ -24,7 +33,12 @@ def get_token():
 
 
 def get_docker_password():
-    cmd = "security find-internet-password -s hub.docker.com -a cnrsunic -w"
+    """
+    Retrieve the Docker Hub password from the MacOS keychain.
+
+    TODO: generalize to support Linux password stores.
+    """
+    cmd = "security find-internet-password -s hub.docker.com -a {} -w".format(DOCKER_USER)
     pswd = spur.LocalShell().run(cmd.split())
     return pswd.output.strip()
 
@@ -101,20 +115,23 @@ class Node(object):
     def _remote_execute(self, cmd, cwd=None):
         shell = spur.SshShell(
                     hostname=self.droplet.ip_address, username="root",
-                    private_key_file="/Users/andrew/.ssh/id_dsa",
+                    private_key_file=os.path.expanduser("~/.ssh/id_dsa"),  # to generalize - could be id_rsa, etc.
                     missing_host_key=spur.ssh.MissingHostKey.warn)
         with shell:
-            result = shell.run(shlex.split(cmd), cwd=cwd)
+            result = shell.run(shlex.split(cmd), cwd=cwd, encoding="utf-8")
             return result.output
 
     def images(self):
         print(self._remote_execute("docker images"))
 
     def pull(self, image):
+        """
+        Pull the Docker image with the given name onto this node.
+        """
         logger.info("Pulling {} on {}".format(image, self.name))
         docker_password = get_docker_password()
-        cmd = "docker login --username=cnrsunic --password='{}'".format(docker_password)
-        result1 = self._remote_execute("docker login --username=cnrsunic --password='{}' hub.docker.com".format(docker_password))
+        cmd = "docker login --username={} --password='{}'".format(DOCKER_USER, docker_password)
+        result1 = self._remote_execute("docker login --username={} --password='{}' hub.docker.com".format(DOCKER_USER, docker_password))
         logger.info("Logged into hub.docker.com")
         logger.debug("Pulling image {}".format(image))
         result2 = self._remote_execute("docker pull {}".format(image))
@@ -125,23 +142,38 @@ class Node(object):
             return False
 
     def get_service(self, id):
+        """
+        Get information about an individual Service.
+        """
         response = self._remote_execute("docker inspect {}".format(id))
         return Service.from_json(response, node=self)
 
-    def services(self, show_all=False):
-        cmd = "docker ps -q"
-        if show_all:
-            cmd += " -a"
-        try:
-            response = self._remote_execute(cmd)
-        except spur.ssh.ConnectionError as err:
-            logger.warning(err.message)
-            response = None
-        if response:
-            ids = response.strip().split("\n")
+    def services(self, show_all=False, update=True):
+        """
+        Return a list of Services
+
+        :param show_all: include stopped services
+        :param update: query nodes for live information about services,
+                       rather than retrieving from cache.
+        """
+        if update or not self._have_cache:
+            cmd = "docker ps -q"
+            if show_all:
+                cmd += " -a"
+            try:
+                response = self._remote_execute(cmd)
+            except spur.ssh.ConnectionError as err:
+                logger.warning(str(err))
+                response = None
+            if response:
+                ids = response.strip().split("\n")
+            else:
+                ids = []
+            services = [self.get_service(id) for id in ids]
+            self._cached_services = services
         else:
-            ids = []
-        return [self.get_service(id) for id in ids]
+            services = self._cached_services
+        return services
 
     def terminate_service(self, id):
         response = self._remote_execute("docker rm -f {}".format(id))
@@ -155,6 +187,45 @@ class Node(object):
     def destroy(self):
         self.droplet.destroy()
 
+    @property
+    def _have_cache(self):
+        if os.path.exists(CACHE_FILE):
+            with open(CACHE_FILE) as fp:
+                cache = json.load(fp)
+            return self.name in cache
+        else:
+            return False
+
+    def _load_services_from_cache(self):
+        if self._have_cache:
+            with open(CACHE_FILE) as fp:
+                cache = json.load(fp)
+            if self.name in cache:
+                return [Service(node=self, **attributes)
+                        for attributes in cache[self.name]["services"]]
+            else:
+                return []
+        else:
+            return []
+
+    def _save_services_to_cache(self, services):
+        if os.path.exists(CACHE_FILE):
+            with open(CACHE_FILE) as fp:
+                cache = json.load(fp)
+        else:
+            cache = {}
+        cache[self.name] = {
+            "services": [
+                dict((attribute, getattr(service, attribute))
+                     for attribute in ("name", "image", "status", "id", "ports", "env", "volumes"))
+                for service in services]
+        }
+        with open(CACHE_FILE, "w") as fp:
+            json.dump(cache, fp, indent=4)
+
+    _cached_services = property(fget=_load_services_from_cache,
+                                fset=_save_services_to_cache)
+
 
 def list_nodes():
     global do_manager
@@ -163,6 +234,7 @@ def list_nodes():
         do_manager = digitalocean.Manager(token=token)
     return [Node.from_droplet(droplet)
             for droplet in do_manager.get_all_droplets()]
+
 
 def get_node(name):
     """Get a node by name."""

@@ -161,14 +161,16 @@ def terminate(service, colour):
     click.echo(service.terminate())
 
 
+@click.option("-f", "--fast", is_flag=True,
+              help="use cached information (faster but may not be up-to-date)")
 @cli.command()
-def services():
+def services(fast):
     """Display a list of services."""
     def format_service(s):
         s = s.as_dict()
         s['Ports'] = ", ".join("{}:{}".format(k, v) for k, v in s['Ports'].items())
         return s
-    click.echo(tabulate(map(format_service, list_services()),
+    click.echo(tabulate(map(format_service, list_services(update=not fast)),
                         headers="keys"))
 
 
