@@ -5,6 +5,7 @@ At present, only works with DigitalOcean Droplets.
 """
 
 import os
+import sys
 from collections import OrderedDict
 from time import sleep
 import json
@@ -26,9 +27,11 @@ def get_token():
 
     TODO: generalize to support Linux password stores.
     """
-    token = spur.LocalShell().run(['security', 'find-generic-password',
-                                   '-s', 'DigitalOcean API token', '-w'],
-                                  encoding='utf-8')
+    if sys.platform == "darwin":
+        cmd = ['security', 'find-generic-password', '-s', 'DigitalOcean API token', '-w']
+    else:
+        cmd = ['pass', 'show', 'tokens/digitalocean']
+    token =  spur.LocalShell().run(cmd, encoding='utf-8')
     return token.output.strip()
 
 
@@ -38,8 +41,11 @@ def get_docker_password():
 
     TODO: generalize to support Linux password stores.
     """
-    cmd = "security find-internet-password -s hub.docker.com -a {} -w".format(DOCKER_USER)
-    pswd = spur.LocalShell().run(cmd.split())
+    if sys.platform == "darwin":
+        cmd = "security find-internet-password -s hub.docker.com -a {} -w"
+    else:
+        cmd = "pass show web/hub.docker.com/{}"
+    pswd = spur.LocalShell().run(cmd.format(DOCKER_USER).split())
     return pswd.output.strip()
 
 
