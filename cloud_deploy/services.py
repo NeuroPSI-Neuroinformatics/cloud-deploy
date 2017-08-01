@@ -6,6 +6,7 @@ e.g. a web server or a database.
 from __future__ import print_function, unicode_literals
 from collections import OrderedDict
 import logging
+from warnings import warn
 import json
 import spur
 
@@ -26,6 +27,7 @@ class Service(object):
         self.ports = ports
         self.env = env
         self.volumes = volumes
+        logger.debug("Instantiated Service '{}' from '{}'".format(name, image))
 
     def __repr__(self):
         return "{} ({}); {}".format(self.name, self.image, self.status)
@@ -63,7 +65,8 @@ class Service(object):
         if volume_data:
             for bind in volume_data:  # info also available under "Mounts"
                 a, b = bind.split(":")
-                assert a == b
+                if a != b:
+                    warn("Non-symmetric path names for volumes {}:{}".format(a, b))
                 volumes.append(a)
         obj = cls(name=data["Name"][1:],  # remove initial "/"
                   image=data["Config"]["Image"],

@@ -18,7 +18,7 @@ from .services import Service
 do_manager = None
 logger = logging.getLogger("deploy")
 CACHE_FILE = os.path.expanduser("~/.clouddeploycache")
-DOCKER_USER = "cnrsunic"
+DOCKER_USER = "apdavison"
 
 
 def get_token():
@@ -42,7 +42,7 @@ def get_docker_password():
     TODO: generalize to support Linux password stores.
     """
     if sys.platform == "darwin":
-        cmd = "security find-internet-password -s hub.docker.com -a {} -w"
+        cmd = "security find-internet-password -s id.docker.com -a {} -w"
     else:
         cmd = "pass show web/hub.docker.com/{}"
     pswd = spur.LocalShell().run(cmd.format(DOCKER_USER).split())
