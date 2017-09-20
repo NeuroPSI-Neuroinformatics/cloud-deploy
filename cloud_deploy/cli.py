@@ -122,8 +122,7 @@ def build(service, colour, remote):
         click.echo("Building image")
 
         result = node._remote_execute(cmd, cwd=project_folder)
-
-    print "image done !"    
+  
          
     logger.debug(result.output)
     if result.return_code != 0:
