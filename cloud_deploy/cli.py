@@ -99,6 +99,11 @@ def build(service, colour, remote):
         logger.info("Building image '{}' for service '{}', environment '{}', version {}".format(image, service, colour, git_tag))
         click.echo("Building image")
         result = shell.run(cmd.split(), cwd=build_directory, allow_error=True)
+
+        logger.debug(result.output)
+        if result.return_code != 0:
+            click.echo(result.output)
+            raise click.Abort()
         
     else :
         #push project on remote
@@ -106,6 +111,7 @@ def build(service, colour, remote):
   
         code_dir = os.getcwd()
         node = get_node(remote)
+        project_folder = code_dir.split("/")[-1]
 
         #clean the temp_dir if needed
         node._remote_execute('rm -R temp_dir')
@@ -113,7 +119,7 @@ def build(service, colour, remote):
         shell.run('scp -r -p {} root@{}:temp_dir'.format(code_dir, node.droplet.ip_address).split())
 
         #rename the previous project to backup 
-        project_folder = code_dir.split("/")[-1]
+        
         node._remote_execute('mv {} {}_backup'.format(project_folder, project_folder))
         node._remote_execute('mv temp_dir {}'.format(project_folder)) 
 
@@ -121,13 +127,7 @@ def build(service, colour, remote):
         logger.info("Building image '{}' for service '{}', environment '{}', version {} on remote machine {} ".format(image, service, colour, git_tag, remote))
         click.echo("Building image")
 
-        result = node._remote_execute(cmd, cwd=project_folder)
-  
-         
-    logger.debug(result.output)
-    if result.return_code != 0:
-        click.echo(result.output)
-        raise click.Abort()
+        result = node._remote_execute(cmd, cwd=project_folder) 
 
     # tag image
     colour_tag = colour or "latest"
@@ -136,7 +136,7 @@ def build(service, colour, remote):
         if remote == None :
             shell.run(cmd.split())
         else : 
-            remote_shell(cmd.split())
+            node._remote_execute(cmd)
 
     if remote == None :
         # push image
