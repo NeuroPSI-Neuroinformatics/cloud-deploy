@@ -107,7 +107,7 @@ class Node(object):
                 region='ams2',
                 image=type,
                 size_slug=size,
-                ssh_keys=['66:0b:b5:20:a0:68:f9:fc:82:5a:de:c1:ce:03:4f:84'])
+                ssh_keys=['66:0b:b5:20:a0:68:f9:fc:82:5a:de:c1:ce:03:4f:84', '59:ac:ca:87:85:e4:0d:9b:99:c2:48:6e:23:61:2f:b8']) # TODO : add a config file to handle this
         new_droplet.create()
         status = None
         while status != "completed":
@@ -119,13 +119,27 @@ class Node(object):
         return cls.from_droplet(running_droplet)
 
     def _remote_execute(self, cmd, cwd=None):
-        shell = spur.SshShell(
-                    hostname=self.droplet.ip_address, username="root",
-                    private_key_file=os.path.expanduser("~/.ssh/id_dsa"),  # to generalize - could be id_rsa, etc.
-                    missing_host_key=spur.ssh.MissingHostKey.warn)
-        with shell:
-            result = shell.run(shlex.split(cmd), cwd=cwd, encoding="utf-8")
-            return result.output
+        list_possible_keys_format = ["id_dsa", "id_rsa"]
+
+        #check if a corresponding key can be found
+        for key in list_possible_keys_format :            
+            if os.path.isfile(os.path.expanduser("~/.ssh/{}".format(key))) is False :
+                if list_possible_keys_format[-1] == key :
+                    raise Exception("No key from ~/.ssh/ matches the list_possible_keys_format {}".format(list_possible_keys_format))
+                    
+        for key in list_possible_keys_format :           
+            shell = spur.SshShell(
+                                hostname=self.droplet.ip_address, username="root",
+                                private_key_file=os.path.expanduser("~/.ssh/{}".format(key)), 
+                                missing_host_key=spur.ssh.MissingHostKey.warn)
+
+            with shell:
+                try :
+                    result = shell.run(shlex.split(cmd), cwd=cwd, encoding="utf-8")
+                    return result.output
+                except :
+                    pass
+
 
     def images(self):
         print(self._remote_execute("docker images"))

@@ -66,8 +66,14 @@ def cli(debug):
 @cli.command()
 @click.argument("service")
 @click.option("--colour")
-def build(service, colour):
-    """Build a Docker image locally and push to Docker Hub."""
+@click.option("--remote")
+def build(service, colour, remote):
+    """
+        Build a Docker image locally and push to Docker Hub.
+        or 
+        Build the image in a remote server using --remote option
+    """
+
     repo = git.Repo('.', search_parent_directories=True)
     git_tag = repo.head.commit.hexsha[:7]
     if repo.is_dirty():
@@ -76,9 +82,7 @@ def build(service, colour):
     shell = spur.LocalShell()
     config = load_config(service)
     image = config["image"]
-    logger.info("Building image '{}' for service '{}', environment '{}', version {}".format(image, service, colour, git_tag))
 
-    # build image
     build_directory = os.getcwd()
     dockerfile = config["dockerfile"]
     cmd = "docker build -t {} -f {} .".format(image, dockerfile)
@@ -88,28 +92,60 @@ def build(service, colour):
         json.dump({"git": git_tag,
                    "colour": colour,
                    "date": datetime.now().isoformat()},
-                  fp)
+                   fp)
 
-    click.echo("Building image")
-    result = shell.run(cmd.split(), cwd=build_directory, allow_error=True)
-    logger.debug(result.output)
-    if result.return_code != 0:
-        click.echo(result.output)
-        raise click.Abort()
+    if remote is None :
+        # build image
+        logger.info("Building image '{}' for service '{}', environment '{}', version {}".format(image, service, colour, git_tag))
+        click.echo("Building image")
+        result = shell.run(cmd.split(), cwd=build_directory, allow_error=True)
+
+        logger.debug(result.output)
+        if result.return_code != 0:
+            click.echo(result.output)
+            raise click.Abort()
+        
+    else :
+        #push project on remote
+        logger.info("Pushing project '{}' to the remote machine {} ".format(service, remote ))
+  
+        code_dir = os.getcwd()
+        node = get_node(remote)
+        project_folder = code_dir.split("/")[-1]
+
+        #clean the temp_dir if needed
+        node._remote_execute('rm -R temp_dir')
+        #copy the files to remote
+        shell.run('scp -r -p {} root@{}:temp_dir'.format(code_dir, node.droplet.ip_address).split())
+
+        #rename the previous project to backup 
+        
+        node._remote_execute('mv {} {}_backup'.format(project_folder, project_folder))
+        node._remote_execute('mv temp_dir {}'.format(project_folder)) 
+
+        # build image
+        logger.info("Building image '{}' for service '{}', environment '{}', version {} on remote machine {} ".format(image, service, colour, git_tag, remote))
+        click.echo("Building image")
+
+        result = node._remote_execute(cmd, cwd=project_folder) 
 
     # tag image
     colour_tag = colour or "latest"
     for tag in (colour_tag, git_tag):
         cmd = "docker tag {} {}:{}".format(image, image, tag)
-        shell.run(cmd.split())
+        if remote is None :
+            shell.run(cmd.split())
+        else : 
+            node._remote_execute(cmd)
 
-    # push image
-    cmd = "docker push {}:{}".format(image, colour_tag)
-    click.echo("Pushing image")
-    result = shell.run(cmd.split())
-    logger.debug(result.output)
-    logger.info("Pushed image {}:{}".format(image, colour_tag))
-
+    if remote is None :
+        # push image
+        cmd = "docker push {}:{}".format(image, colour_tag)
+        click.echo("Pushing image")
+        result = shell.run(cmd.split())
+        logger.debug(result.output)
+        logger.info("Pushed image {}:{}".format(image, colour_tag))
+        
 
 @cli.command()
 @click.argument("service")
