@@ -77,7 +77,7 @@ def build(service, colour, remote):
     repo = git.Repo('.', search_parent_directories=True)
     git_tag = repo.head.commit.hexsha[:7]
     if repo.is_dirty():
-            git_tag += "z"
+        git_tag += "z"
 
     shell = spur.LocalShell()
     config = load_config(service)
@@ -90,11 +90,11 @@ def build(service, colour, remote):
     # write version information
     with open(join(build_directory, "build_info.json"), "w") as fp:
         json.dump({"git": git_tag,
-                "colour": colour,
-                "date": datetime.now().isoformat()},
-                fp)
+                   "colour": colour,
+                   "date": datetime.now().isoformat()},
+                   fp)
 
-    if remote == None :
+    if remote is None :
         # build image
         logger.info("Building image '{}' for service '{}', environment '{}', version {}".format(image, service, colour, git_tag))
         click.echo("Building image")
@@ -107,7 +107,7 @@ def build(service, colour, remote):
         
     else :
         #push project on remote
-        logger.info("Pushing project '{}' on the remote machine {} ".format(service, remote ))
+        logger.info("Pushing project '{}' to the remote machine {} ".format(service, remote ))
   
         code_dir = os.getcwd()
         node = get_node(remote)
@@ -133,12 +133,12 @@ def build(service, colour, remote):
     colour_tag = colour or "latest"
     for tag in (colour_tag, git_tag):
         cmd = "docker tag {} {}:{}".format(image, image, tag)
-        if remote == None :
+        if remote is None :
             shell.run(cmd.split())
         else : 
             node._remote_execute(cmd)
 
-    if remote == None :
+    if remote is None :
         # push image
         cmd = "docker push {}:{}".format(image, colour_tag)
         click.echo("Pushing image")

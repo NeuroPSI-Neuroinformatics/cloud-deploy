@@ -107,10 +107,10 @@ class Node(object):
                 region='ams2',
                 image=type,
                 size_slug=size,
-                ssh_keys=['66:0b:b5:20:a0:68:f9:fc:82:5a:de:c1:ce:03:4f:84']) #think about what to do with that
+                ssh_keys=['66:0b:b5:20:a0:68:f9:fc:82:5a:de:c1:ce:03:4f:84', '59:ac:ca:87:85:e4:0d:9b:99:c2:48:6e:23:61:2f:b8']) # TODO : add a config file to handle this
         new_droplet.create()
         status = None
-        while status != "completed":       
+        while status != "completed":
             actions = new_droplet.get_actions()
             actions[0].load()
             status = actions[0].status
@@ -123,7 +123,7 @@ class Node(object):
 
         #check if a corresponding key can be found
         for key in list_possible_keys_format :            
-            if os.path.isfile(os.path.expanduser("~/.ssh/{}".format(key))) == False :
+            if os.path.isfile(os.path.expanduser("~/.ssh/{}".format(key))) is False :
                 if list_possible_keys_format[-1] == key :
                     raise Exception("No key from ~/.ssh/ matches the list_possible_keys_format {}".format(list_possible_keys_format))
                     
