@@ -64,10 +64,10 @@ class Service(object):
         volume_data = data["HostConfig"]["Binds"]
         if volume_data:
             for bind in volume_data:  # info also available under "Mounts"
-                a, b = bind.split(":")
-                if a != b:
-                    warn("Non-symmetric path names for volumes {}:{}".format(a, b))
-                volumes.append(a)
+                parts = bind.split(":")
+                if parts[0] != parts[1]:
+                    warn("Non-symmetric path names for volumes {}".format(bind))
+                volumes.append(parts[0])
         obj = cls(name=data["Name"][1:],  # remove initial "/"
                   image=data["Config"]["Image"],
                   node=node,
