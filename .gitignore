@@ -63,3 +63,6 @@ target/
 
 # Editor files
 .idea
+
+# config should not be under version control
+*/config.yml

@@ -38,7 +38,7 @@ import git
 import spur
 import click
 from tabulate import tabulate
-from . import Service, Node, list_nodes, get_node, list_services, find_service
+from . import Service, DigitalOceanNode, list_nodes, get_node, list_services, find_service
 
 logging.basicConfig(filename='deploy.log', level=logging.WARNING,
                     format='%(asctime)s %(levelname)s %(message)s')
@@ -70,7 +70,7 @@ def cli(debug):
 def build(service, colour, remote):
     """
         Build a Docker image locally and push to Docker Hub.
-        or 
+        or
         Build the image in a remote server using --remote option
     """
 
@@ -104,11 +104,11 @@ def build(service, colour, remote):
         if result.return_code != 0:
             click.echo(result.output)
             raise click.Abort()
-        
+
     else :
         #push project on remote
         logger.info("Pushing project '{}' to the remote machine {} ".format(service, remote ))
-  
+
         code_dir = os.getcwd()
         node = get_node(remote)
         project_folder = code_dir.split("/")[-1]
@@ -118,16 +118,16 @@ def build(service, colour, remote):
         #copy the files to remote
         shell.run('scp -r -p {} root@{}:temp_dir'.format(code_dir, node.droplet.ip_address).split())
 
-        #rename the previous project to backup 
-        
+        #rename the previous project to backup
+
         node._remote_execute('mv {} {}_backup'.format(project_folder, project_folder))
-        node._remote_execute('mv temp_dir {}'.format(project_folder)) 
+        node._remote_execute('mv temp_dir {}'.format(project_folder))
 
         # build image
         logger.info("Building image '{}' for service '{}', environment '{}', version {} on remote machine {} ".format(image, service, colour, git_tag, remote))
         click.echo("Building image")
 
-        result = node._remote_execute(cmd, cwd=project_folder) 
+        result = node._remote_execute(cmd, cwd=project_folder)
 
     # tag image
     colour_tag = colour or "latest"
@@ -135,7 +135,7 @@ def build(service, colour, remote):
         cmd = "docker tag {} {}:{}".format(image, image, tag)
         if remote is None :
             shell.run(cmd.split())
-        else : 
+        else :
             node._remote_execute(cmd)
 
     if remote is None :
@@ -145,7 +145,7 @@ def build(service, colour, remote):
         result = shell.run(cmd.split())
         logger.debug(result.output)
         logger.info("Pushed image {}:{}".format(image, colour_tag))
-        
+
 
 @cli.command()
 @click.argument("service")
@@ -253,11 +253,11 @@ def node_list():
 
 @click.argument("name")
 @click.option("--type", default="docker")
-@click.option("--size", type=click.Choice(['512mb', '1gb', '2gb']), default="512mb")
+@click.option("--size", type=click.Choice(['s-1vcpu-1gb', 's-1vcpu-2gb', 's-2vcpu-2gb', 's-2vcpu-4gb']), default="s-1vcpu-1gb")
 @node.command('create')
 def node_create(name, type, size):
     """Create a new server node."""
-    return Node.create(name, type, size)
+    return DigitalOceanNode.create(name, type, size)
 
 
 @click.argument("name")

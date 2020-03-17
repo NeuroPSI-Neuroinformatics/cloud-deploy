@@ -8,9 +8,27 @@ from collections import OrderedDict
 import logging
 from warnings import warn
 import json
+import socket
+import yaml
 import spur
 
 logger = logging.getLogger("deploy")
+reverse_dns_lookup = {}
+
+
+def build_reverse_lookup():
+    global reverse_dns_lookup
+    with open("config.yml") as fp:
+        config = yaml.safe_load(fp)
+
+    urls = config.get("URLS", [])
+    for url in urls:
+        try:
+            ip_addr = socket.gethostbyname(url)
+        except Exception:
+            pass
+        else:
+            reverse_dns_lookup[ip_addr] = url
 
 
 class Service(object):
@@ -35,14 +53,17 @@ class Service(object):
     def as_dict(self):
         d = OrderedDict((key.title(), str(getattr(self, key)))
                         for key in ["name", "image", "status", "url"])
-        d["ID"] = self.id[:12]
+        d["IP"] = self.node.ip_address
+        #d["ID"] = self.id[:12]
         d["Node"] = self.node.name
         d["Ports"] = self.ports
         return d
 
     @property
     def url(self):
-        return "https://" + self.node.ip_address
+        if not reverse_dns_lookup:
+            build_reverse_lookup()
+        return reverse_dns_lookup.get(self.node.ip_address, "")
 
     @classmethod
     def from_json(cls, s, node):

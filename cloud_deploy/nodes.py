@@ -1,7 +1,7 @@
 """
 Provides a class representing a compute node.
 
-At present, only works with DigitalOcean Droplets.
+At present, only works with DigitalOcean Droplets and OpenStack (Nova) VMs at CSCS.
 """
 
 import os
@@ -11,24 +11,46 @@ from time import sleep
 import json
 import shlex
 import logging
+import getpass
+
+# for Digital Ocean
 import digitalocean
+# for OpenStack
+from keystoneauth1.identity import v3
+from keystoneauth1 import session as kssession
+from keystoneauth1.exceptions.auth import AuthorizationFailure
+from keystoneauth1.extras._saml2 import V3Saml2Password
+from keystoneclient.v3 import client as ksclient
+from novaclient import client as novaclient
+
+import yaml
 import spur
 from .services import Service
 
 do_manager = None
+nova_clients = None
 logger = logging.getLogger("deploy")
 CACHE_FILE = os.path.expanduser("~/.clouddeploycache")
-DOCKER_USER = "apdavison"
+
+with open("config.yml") as fp:
+    config = yaml.safe_load(fp)
+    DOCKER_USER = config["DOCKER_USER"]
+    CSCS_USER = config["CSCS_USER"]
+    CSCS_PROJECTS = config["CSCS_PROJECTS"]
+    OS_AUTH_URL = config["OS_AUTH_URL"]
+    OS_IDENTITY_PROVIDER = config["OS_IDENTITY_PROVIDER"]
+    OS_IDENTITY_PROVIDER_URL = config["OS_IDENTITY_PROVIDER_URL"]
+    SSH_KEYS = config["SSH_KEYS"]
 
 
-def get_token():
+def get_do_token():
     """
     Retrieve the DigitalOcean API token from the MacOS keychain.
 
     TODO: generalize to support Linux password stores.
     """
     if sys.platform == "darwin":
-        cmd = ['security', 'find-generic-password', '-s', 'DigitalOcean API token', '-w']
+        cmd = ['security', 'find-generic-password', '-s', 'DigitalOcean API Token', '-w']
     else:
         cmd = ['pass', 'show', 'tokens/digitalocean']
     token =  spur.LocalShell().run(cmd, encoding='utf-8')
@@ -49,6 +71,42 @@ def get_docker_password():
     return pswd.output.strip()
 
 
+def get_nova_clients(project_names, token=None):
+    username = CSCS_USER
+    if token:
+        auth = v3.Token(auth_url=OS_AUTH_URL, token=token)
+    else:
+        pwd = os.environ.get('CSCS_PASS')
+        if not pwd:
+            pwd = getpass.getpass("Password: ")
+        auth = V3Saml2Password(auth_url=OS_AUTH_URL,
+                                identity_provider=OS_IDENTITY_PROVIDER,
+                                protocol='mapped',
+                                identity_provider_url=OS_IDENTITY_PROVIDER_URL,
+                                username=username,
+                                password=pwd)
+
+    session1 = kssession.Session(auth=auth)
+    ks_client = ksclient.Client(session=session1, interface='public')
+    try:
+        user_id = session1.get_user_id()
+    except AuthorizationFailure:
+        raise Exception("Couldn't authenticate! Incorrect username.")
+    except IndexError:
+        raise Exception("Couldn't authenticate! Incorrect password.")
+    ks_projects = {ksprj.name: ksprj
+                   for ksprj in ks_client.projects.list(user=user_id)}
+    clients = {}
+    for project_name in project_names:
+        project_id = ks_projects[project_name].id
+        auth2 = v3.Token(auth_url=OS_AUTH_URL,
+                        token=session1.get_token(),
+                        project_id=project_id)
+        session2 = kssession.Session(auth=auth2)
+        clients[project_name] = novaclient.Client(version=2, session=session2)
+    return clients
+
+
 class Node(object):
     """
     A compute node.
@@ -57,81 +115,20 @@ class Node(object):
     def __init__(self):
         pass
 
-    def __repr__(self):
-        return "{}@{} [{}, {} MB, {}]".format(self.droplet.name,
-                                              self.droplet.ip_address,
-                                              self.droplet.status,
-                                              self.droplet.size['memory'],
-                                              self.droplet.region['name'])
-
-    @property
-    def name(self):
-        return self.droplet.name
-
-    @property
-    def ip_address(self):
-        return self.droplet.ip_address
-
-    def as_dict(self):
-        d = OrderedDict((key.title(), str(getattr(self.droplet, key)))
-                        for key in ["name", "ip_address", "created_at"])
-        d["Size"] = self.droplet.size['memory']
-        d["Region"] = self.droplet.region['name']
-        return d
-
-    def show(self):
-        print("Name:       " + self.droplet.name)
-        print("IP address: " + str(self.droplet.ip_address))
-        print("Status:     " + str(self.droplet.status))
-        print("Size:       " + str(self.droplet.size['memory']) + " MB")
-        print("Region:     " + self.droplet.region['name'])
-        print("Type:       " + self.droplet.image['slug'])
-        print("Created:    " + self.droplet.created_at)
-
-    @classmethod
-    def from_droplet(cls, droplet):
-        obj = cls()
-        obj.droplet = droplet
-        return obj
-
-    @classmethod
-    def create(cls, name, type="docker", size="512mb"):
-        # we use the name "type" for Digital Ocean images to avoid confusion with Docker images.
-        global do_manager
-        if do_manager is None:
-            token = get_token()
-            do_manager = digitalocean.Manager(token=token)
-        new_droplet = digitalocean.Droplet(
-                token=do_manager.token,
-                name=name,
-                region='ams2',
-                image=type,
-                size_slug=size,
-                ssh_keys=['66:0b:b5:20:a0:68:f9:fc:82:5a:de:c1:ce:03:4f:84', '59:ac:ca:87:85:e4:0d:9b:99:c2:48:6e:23:61:2f:b8']) # TODO : add a config file to handle this
-        new_droplet.create()
-        status = None
-        while status != "completed":
-            actions = new_droplet.get_actions()
-            actions[0].load()
-            status = actions[0].status
-            sleep(10)
-        running_droplet = do_manager.get_droplet(new_droplet.id)
-        return cls.from_droplet(running_droplet)
-
     def _remote_execute(self, cmd, cwd=None):
         list_possible_keys_format = ["id_dsa", "id_rsa"]
 
         #check if a corresponding key can be found
-        for key in list_possible_keys_format :            
-            if os.path.isfile(os.path.expanduser("~/.ssh/{}".format(key))) is False :
+        for key in list_possible_keys_format:
+            if os.path.isfile(os.path.expanduser("~/.ssh/{}".format(key))) is False:
                 if list_possible_keys_format[-1] == key :
                     raise Exception("No key from ~/.ssh/ matches the list_possible_keys_format {}".format(list_possible_keys_format))
-                    
-        for key in list_possible_keys_format :           
+
+        for key in list_possible_keys_format:
             shell = spur.SshShell(
-                                hostname=self.droplet.ip_address, username="root",
-                                private_key_file=os.path.expanduser("~/.ssh/{}".format(key)), 
-                                missing_host_key=spur.ssh.MissingHostKey.warn)
+                        hostname=self.ip_address, username=self.remote_username,
+                        private_key_file=os.path.expanduser("~/.ssh/{}".format(key)),
+                        missing_host_key=spur.ssh.MissingHostKey.warn)
 
             with shell:
                 try :
@@ -140,9 +137,12 @@ class Node(object):
                 except :
                     pass
 
+    @property
+    def sudo_cmd(self):
+        return self.use_sudo and "sudo " or ""
 
     def images(self):
-        print(self._remote_execute("docker images"))
+        print(self._remote_execute(f"{self.sudo_cmd}docker images"))
 
     def pull(self, image):
         """
@@ -150,11 +150,11 @@ class Node(object):
         """
         logger.info("Pulling {} on {}".format(image, self.name))
         docker_password = get_docker_password()
-        cmd = "docker login --username={} --password='{}'".format(DOCKER_USER, docker_password)
-        result1 = self._remote_execute("docker login --username={} --password='{}' hub.docker.com".format(DOCKER_USER, docker_password))
+        cmd = "f{self.sudo_cmd}docker login --username={DOCKER_USER} --password='{docker_password}'"
+        result1 = self._remote_execute(cmd)
         logger.info("Logged into hub.docker.com")
         logger.debug("Pulling image {}".format(image))
-        result2 = self._remote_execute("docker pull {}".format(image))
+        result2 = self._remote_execute("f{self.sudo_cmd}docker pull {image}")
         if "Downloaded newer image" in result2 or "Image is up to date" in result2:
             return True
         else:
@@ -165,7 +165,7 @@ class Node(object):
         """
         Get information about an individual Service.
         """
-        response = self._remote_execute("docker inspect {}".format(id))
+        response = self._remote_execute(f"{self.sudo_cmd}docker inspect {id}")
         return Service.from_json(response, node=self)
 
     def services(self, show_all=False, update=True):
@@ -177,7 +177,7 @@ class Node(object):
                        rather than retrieving from cache.
         """
         if update or not self._have_cache:
-            cmd = "docker ps -q"
+            cmd = f"{self.sudo_cmd}docker ps -q"
             if show_all:
                 cmd += " -a"
             try:
@@ -196,16 +196,10 @@ class Node(object):
         return services
 
     def terminate_service(self, id):
-        response = self._remote_execute("docker rm -f {}".format(id))
+        response = self._remote_execute(f"{self.sudo_cmd}docker rm -f {id}")
 
     def rename_service(self, old_name, new_name):
-        response = self._remote_execute("docker rename {} {}".format(old_name, new_name))
-
-    def shutdown(self):
-        self.droplet.shutdown()
-
-    def destroy(self):
-        self.droplet.destroy()
+        response = self._remote_execute(f"{self.sudo_cmd}docker rename {old_name} {new_name}")
 
     @property
     def _have_cache(self):
@@ -247,13 +241,163 @@ class Node(object):
                                 fset=_save_services_to_cache)
 
 
+class DigitalOceanNode(Node):
+    """
+    A compute node running on Digital Ocean (a 'droplet')
+    """
+    remote_username = "root"
+    use_sudo = False
+
+    def __repr__(self):
+        return "{}@{} [{}, {} MB, {}]".format(self.droplet.name,
+                                              self.droplet.ip_address,
+                                              self.droplet.status,
+                                              self.droplet.size['memory'],
+                                              self.droplet.region['name'])
+
+    @property
+    def name(self):
+        return self.droplet.name
+
+    @property
+    def ip_address(self):
+        return self.droplet.ip_address
+
+    def as_dict(self):
+        d = OrderedDict((key.title(), str(getattr(self.droplet, key)))
+                        for key in ["name", "ip_address", "created_at"])
+        d["Size"] = self.droplet.size['memory']
+        d["Location"] = self.droplet.region['name']
+        d["Type"] = self.droplet.image['name']
+        d["Provider"] = "Digital Ocean"
+        return d
+
+    def show(self):
+        print("Name:       " + self.droplet.name)
+        print("IP address: " + str(self.droplet.ip_address))
+        print("Status:     " + str(self.droplet.status))
+        print("Size:       " + str(self.droplet.size['memory']) + " MB")
+        print("Location:   " + self.droplet.region['name'])
+        print("Type:       " + self.droplet.image['slug'])
+        print("Created:    " + self.droplet.created_at)
+
+    @classmethod
+    def from_droplet(cls, droplet):
+        obj = cls()
+        obj.droplet = droplet
+        return obj
+
+    @classmethod
+    def create(cls, name, type="docker", size="s-1vcpu-1gb"):
+        # we use the name "type" for Digital Ocean images to avoid confusion with Docker images.
+        global do_manager
+        if do_manager is None:
+            token = get_do_token()
+            do_manager = digitalocean.Manager(token=token)
+        new_droplet = digitalocean.Droplet(
+                token=do_manager.token,
+                name=name,
+                region='ams2',
+                image=type,
+                size_slug=size,
+                ssh_keys=SSH_KEYS)
+        new_droplet.create()
+        status = None
+        while status != "completed":
+            actions = new_droplet.get_actions()
+            actions[0].load()
+            status = actions[0].status
+            sleep(10)
+        running_droplet = do_manager.get_droplet(new_droplet.id)
+        return cls.from_droplet(running_droplet)
+
+    def shutdown(self):
+        self.droplet.shutdown()
+
+    def destroy(self):
+        self.droplet.destroy()
+
+
+class OpenStackNode(Node):
+    """
+    A compute node running on an OpenStack installation.
+
+    (specifically, we support the installation at CSCS).
+    """
+    remote_username = "ubuntu"
+    use_sudo = True
+
+    @classmethod
+    def from_nova(cls, nova_server, project_name):
+        obj = cls()
+        obj.nova_server = nova_server
+        obj.project_name = project_name
+        return obj
+
+    def __repr__(self):
+        return "{}@{} [{}, {} MB, {}]".format(self.name,
+                                              self.ip_address,
+                                              self.nova_server.status,
+                                              self.memory,
+                                              "CSCS")
+
+    @property
+    def name(self):
+        return self.nova_server.name
+
+    @property
+    def ip_address(self):
+        for addr in self.nova_server.addresses['int-net1']:
+            if addr['OS-EXT-IPS:type'] == 'floating':
+                return addr["addr"]
+
+    @property
+    def flavor(self):
+        global nova_clients
+        return nova_clients[CSCS_PROJECTS[0]].flavors.get(self.nova_server.flavor['id']).name
+
+    @property
+    def memory(self):
+        global nova_clients
+        return nova_clients[CSCS_PROJECTS[0]].flavors.get(self.nova_server.flavor['id']).ram
+
+    @property
+    def created_at(self):
+        return self.nova_server.created
+
+    def as_dict(self):
+        d = OrderedDict((key.title(), str(getattr(self, key)))
+                        for key in ["name", "ip_address", "created_at"])
+        d["Size"] = self.memory
+        d["Location"] = "CSCS"
+        d["Type"] = self.flavor
+        d["Provider"] = f"ICEI {self.project_name}"
+        return d
+
+    def show(self):
+        print("Name:       " + self.name)
+        print("IP address: " + str(self.ip_address))
+        print("Status:     " + str(self.nova_server.status))
+        print("Size:       " + str(self.memory) + " MB")
+        print("Location:   " + "CSCS")
+        print("Type:       " + self.flavor)
+        print("Created:    " + self.created_at)
+
+
 def list_nodes():
-    global do_manager
+    global do_manager, nova_clients
     if do_manager is None:
-        token = get_token()
+        token = get_do_token()
         do_manager = digitalocean.Manager(token=token)
-    return [Node.from_droplet(droplet)
-            for droplet in do_manager.get_all_droplets()]
+    if nova_clients is None:
+        nova_clients = get_nova_clients(CSCS_PROJECTS)
+    do_nodes = [DigitalOceanNode.from_droplet(droplet)
+                for droplet in do_manager.get_all_droplets()]
+    cscs_nodes = []
+    for project_name, nova_client in nova_clients.items():
+        cscs_nodes.extend([OpenStackNode.from_nova(nova_server, project_name)
+                           for nova_server in nova_client.servers.list()])
+    return do_nodes + cscs_nodes
 
 
 def get_node(name):

@@ -2,12 +2,12 @@
 """
 A simple tool for deploying services (provided by Docker containers) in the cloud.
 
-Author: Andrew Davison, CNRS, 2016-2017
+Author: Andrew Davison, CNRS, 2016-2020
 """
 
 __version__ = '0.1.0'
 
-from .nodes import Node, list_nodes, get_node
+from .nodes import DigitalOceanNode, OpenStackNode, list_nodes, get_node
 from .services import Service
 
 
