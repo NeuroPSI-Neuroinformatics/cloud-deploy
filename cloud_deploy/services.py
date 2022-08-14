@@ -4,6 +4,7 @@ e.g. a web server or a database.
 """
 
 from __future__ import print_function, unicode_literals
+import os.path
 from collections import OrderedDict
 import logging
 from warnings import warn
@@ -16,9 +17,16 @@ logger = logging.getLogger("deploy")
 reverse_dns_lookup = {}
 
 
+def get_config_file():
+    if os.path.exists("config.yml"):
+        return "config.yml"
+    else:
+        return os.path.expanduser("~/.cld-config.yml")
+
+
 def build_reverse_lookup():
     global reverse_dns_lookup
-    with open("config.yml") as fp:
+    with open(get_config_file()) as fp:
         config = yaml.safe_load(fp)
 
     urls = config.get("URLS", [])

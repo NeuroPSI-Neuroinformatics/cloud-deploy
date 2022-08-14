@@ -97,7 +97,7 @@ def build(service, colour, remote):
     if remote is None :
         # build image
         logger.info("Building image '{}' for service '{}', environment '{}', version {}".format(image, service, colour, git_tag))
-        click.echo("Building image")
+        click.echo(f"Building image with command {cmd}")
         result = shell.run(cmd.split(), cwd=build_directory, allow_error=True)
 
         logger.debug(result.output)

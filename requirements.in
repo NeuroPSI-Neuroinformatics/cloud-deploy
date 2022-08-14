@@ -13,3 +13,4 @@ nose
 gitpython
 pyyaml
 hbp_sphinx_theme
+python-openstackclient

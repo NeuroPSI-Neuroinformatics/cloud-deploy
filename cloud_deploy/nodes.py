@@ -19,20 +19,21 @@ import digitalocean
 from keystoneauth1.identity import v3
 from keystoneauth1 import session as kssession
 from keystoneauth1.exceptions.auth import AuthorizationFailure
+from keystoneauth1.exceptions.connection import ConnectFailure
 from keystoneauth1.extras._saml2 import V3Saml2Password
 from keystoneclient.v3 import client as ksclient
 from novaclient import client as novaclient
 
 import yaml
 import spur
-from .services import Service
+from .services import Service, get_config_file
 
 do_manager = None
 nova_clients = None
 logger = logging.getLogger("deploy")
 CACHE_FILE = os.path.expanduser("~/.clouddeploycache")
 
-with open("config.yml") as fp:
+with open(get_config_file()) as fp:
     config = yaml.safe_load(fp)
     DOCKER_USER = config["DOCKER_USER"]
     CSCS_USER = config["CSCS_USER"]
@@ -67,8 +68,9 @@ def get_docker_password():
         cmd = "security find-internet-password -s id.docker.com -a {} -w"
     else:
         cmd = "pass show web/hub.docker.com/{}"
-    pswd = spur.LocalShell().run(cmd.format(DOCKER_USER).split())
-    return pswd.output.strip()
+    #pswd = spur.LocalShell().run(cmd.format(DOCKER_USER).split())
+    #return pswd.output.strip()
+    return "Scw-sAR-Pa6-p3Z"
 
 
 def get_nova_clients(project_names, token=None):
@@ -94,6 +96,9 @@ def get_nova_clients(project_names, token=None):
         raise Exception("Couldn't authenticate! Incorrect username.")
     except IndexError:
         raise Exception("Couldn't authenticate! Incorrect password.")
+    except ConnectFailure as err:
+        print(err)
+        return {}
     ks_projects = {ksprj.name: ksprj
                    for ksprj in ks_client.projects.list(user=user_id)}
     clients = {}
@@ -134,8 +139,11 @@ class Node(object):
                 try :
                     result = shell.run(shlex.split(cmd), cwd=cwd, encoding="utf-8")
                     return result.output
-                except :
-                    pass
+                except spur.results.RunProcessError as err:
+                    if "docker: command not found" in err.stderr_output:
+                        pass  # todo: warn
+                    else:
+                        raise
 
     @property
     def sudo_cmd(self):
