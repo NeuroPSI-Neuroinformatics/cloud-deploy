@@ -4,32 +4,234 @@
 #
 #    pip-compile --output-file deployment/requirements-deploy.txt deployment/requirements-deploy.in
 #
-alabaster==0.7.8          # via sphinx
-babel==2.3.4              # via sphinx
-certifi==2019.11.28       # via requests
-chardet==3.0.4            # via requests
-click==6.6                # via -r requirements.in
-docutils==0.12            # via sphinx
-ecdsa==0.13.3             # via paramiko
-gitdb==0.6.4              # via gitpython
-gitpython==2.0.2          # via -r requirements.in
-hbp-sphinx-theme==0.3.4   # via -r requirements.in
-idna==2.7                 # via requests
-imagesize==0.7.1          # via sphinx
-jinja2==2.8               # via sphinx
-markupsafe==0.23          # via jinja2
-nose==1.3.7               # via -r requirements.in
-paramiko==1.17.0          # via spur
-pycrypto==2.6.1           # via paramiko
-pygments==2.1.3           # via sphinx
-python-digitalocean==1.8.1  # via -r requirements.in
-pytz==2016.4              # via babel
-pyyaml==5.1               # via -r requirements.in
-requests==2.20.0          # via python-digitalocean
-six==1.10.0               # via sphinx
-smmap==0.9.0              # via gitdb
-snowballstemmer==1.2.1    # via sphinx
-sphinx==1.4.1             # via -r requirements.in
-spur==0.3.17              # via -r requirements.in
-tabulate==0.7.5           # via -r requirements.in
-urllib3==1.24.3           # via requests
+alabaster==0.7.8
+    # via sphinx
+appdirs==1.4.4
+    # via openstacksdk
+attrs==22.1.0
+    # via cmd2
+autopage==0.5.1
+    # via cliff
+babel==2.3.4
+    # via sphinx
+certifi==2022.12.7
+    # via requests
+cffi==1.15.1
+    # via cryptography
+charset-normalizer==2.1.1
+    # via requests
+click==6.6
+    # via -r requirements.in
+cliff==4.1.0
+    # via
+    #   osc-lib
+    #   python-openstackclient
+cmd2==2.4.2
+    # via cliff
+cryptography==38.0.4
+    # via openstacksdk
+debtcollector==2.5.0
+    # via
+    #   oslo-config
+    #   oslo-utils
+    #   python-keystoneclient
+decorator==5.1.1
+    # via
+    #   dogpile-cache
+    #   openstacksdk
+docutils==0.12
+    # via sphinx
+dogpile-cache==1.1.8
+    # via openstacksdk
+ecdsa==0.13.3
+    # via paramiko
+gitdb==0.6.4
+    # via gitpython
+gitpython==2.0.2
+    # via -r requirements.in
+hbp-sphinx-theme==0.3.4
+    # via -r requirements.in
+idna==2.7
+    # via requests
+imagesize==0.7.1
+    # via sphinx
+importlib-metadata==5.1.0
+    # via cliff
+iso8601==1.1.0
+    # via
+    #   keystoneauth1
+    #   openstacksdk
+    #   oslo-utils
+    #   python-novaclient
+    #   python-openstackclient
+jinja2==2.8
+    # via sphinx
+jmespath==1.0.1
+    # via openstacksdk
+jsonpatch==1.32
+    # via openstacksdk
+jsonpointer==2.3
+    # via jsonpatch
+keystoneauth1==5.1.0
+    # via
+    #   openstacksdk
+    #   osc-lib
+    #   python-cinderclient
+    #   python-keystoneclient
+    #   python-novaclient
+markupsafe==0.23
+    # via jinja2
+msgpack==1.0.4
+    # via oslo-serialization
+munch==2.5.0
+    # via openstacksdk
+netaddr==0.8.0
+    # via
+    #   oslo-config
+    #   oslo-utils
+netifaces==0.11.0
+    # via
+    #   openstacksdk
+    #   oslo-utils
+nose==1.3.7
+    # via -r requirements.in
+openstacksdk==0.103.0
+    # via
+    #   osc-lib
+    #   python-openstackclient
+os-service-types==1.7.0
+    # via
+    #   keystoneauth1
+    #   openstacksdk
+osc-lib==2.6.2
+    # via python-openstackclient
+oslo-config==9.0.0
+    # via python-keystoneclient
+oslo-i18n==5.1.0
+    # via
+    #   osc-lib
+    #   oslo-config
+    #   oslo-utils
+    #   python-cinderclient
+    #   python-keystoneclient
+    #   python-novaclient
+    #   python-openstackclient
+oslo-serialization==5.0.0
+    # via
+    #   python-keystoneclient
+    #   python-novaclient
+oslo-utils==6.1.0
+    # via
+    #   osc-lib
+    #   oslo-serialization
+    #   python-cinderclient
+    #   python-keystoneclient
+    #   python-novaclient
+    #   python-openstackclient
+packaging==22.0
+    # via
+    #   oslo-utils
+    #   python-keystoneclient
+paramiko==1.17.0
+    # via spur
+pbr==5.11.0
+    # via
+    #   keystoneauth1
+    #   openstacksdk
+    #   os-service-types
+    #   osc-lib
+    #   oslo-i18n
+    #   oslo-serialization
+    #   python-cinderclient
+    #   python-keystoneclient
+    #   python-novaclient
+    #   python-openstackclient
+    #   stevedore
+prettytable==3.5.0
+    # via
+    #   cliff
+    #   python-cinderclient
+    #   python-novaclient
+pycparser==2.21
+    # via cffi
+pycrypto==2.6.1
+    # via paramiko
+pygments==2.1.3
+    # via sphinx
+pyparsing==3.0.9
+    # via oslo-utils
+pyperclip==1.8.2
+    # via cmd2
+python-cinderclient==9.1.0
+    # via python-openstackclient
+python-digitalocean==1.8.1
+    # via -r requirements.in
+python-keystoneclient==5.0.1
+    # via python-openstackclient
+python-novaclient==18.2.0
+    # via python-openstackclient
+python-openstackclient==6.0.0
+    # via -r requirements.in
+pytz==2016.4
+    # via
+    #   babel
+    #   oslo-serialization
+    #   oslo-utils
+pyyaml==5.1
+    # via
+    #   -r requirements.in
+    #   cliff
+    #   openstacksdk
+    #   oslo-config
+requests==2.28.1
+    # via
+    #   keystoneauth1
+    #   oslo-config
+    #   python-cinderclient
+    #   python-digitalocean
+    #   python-keystoneclient
+requestsexceptions==1.4.0
+    # via openstacksdk
+rfc3986==2.0.0
+    # via oslo-config
+simplejson==3.18.0
+    # via
+    #   osc-lib
+    #   python-cinderclient
+six==1.10.0
+    # via
+    #   keystoneauth1
+    #   munch
+    #   python-keystoneclient
+    #   sphinx
+smmap==0.9.0
+    # via gitdb
+snowballstemmer==1.2.1
+    # via sphinx
+sphinx==1.4.1
+    # via -r requirements.in
+spur==0.3.17
+    # via -r requirements.in
+stevedore==4.1.1
+    # via
+    #   cliff
+    #   dogpile-cache
+    #   keystoneauth1
+    #   osc-lib
+    #   oslo-config
+    #   python-cinderclient
+    #   python-keystoneclient
+    #   python-novaclient
+    #   python-openstackclient
+tabulate==0.7.5
+    # via -r requirements.in
+urllib3==1.24.3
+    # via requests
+wcwidth==0.2.5
+    # via
+    #   cmd2
+    #   prettytable
+wrapt==1.14.1
+    # via debtcollector
+zipp==3.11.0
+    # via importlib-metadata
